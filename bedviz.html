@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bed Mesh Visualizer</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/plotly.js/2.27.0/plotly.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Syne:wght@400;700;800&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #f4f5f7;
+    --panel: #ffffff;
+    --border: #dde1e9;
+    --accent: #2563eb;
+    --accent2: #ef4444;
+    --text: #1e2330;
+    --text-dim: #8a93a8;
+    --mono: 'JetBrains Mono', monospace;
+    --sans: 'Syne', sans-serif;
+  }
+
+  html, body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--mono);
+    min-height: 100vh;
+  }
+
+  body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 40px 24px 60px;
+    gap: 0;
+  }
+
+  header {
+    width: 100%;
+    max-width: 960px;
+    margin-bottom: 36px;
+    display: flex;
+    align-items: baseline;
+    gap: 16px;
+  }
+
+  header h1 {
+    font-family: var(--sans);
+    font-weight: 800;
+    font-size: 1.6rem;
+    letter-spacing: -0.02em;
+    color: #1e2330;
+  }
+
+  header span {
+    font-size: 0.75rem;
+    color: var(--text-dim);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .input-section {
+    width: 100%;
+    max-width: 960px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .label-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  label {
+    font-size: 0.7rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+  }
+
+  .btn-row {
+    display: flex;
+    gap: 10px;
+  }
+
+  button {
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 6px 16px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text-dim);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  button:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  button.primary {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: rgba(0,229,255,0.06);
+  }
+
+  button.primary:hover {
+    background: rgba(0,229,255,0.14);
+  }
+
+  textarea {
+    width: 100%;
+    height: 180px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    line-height: 1.6;
+    padding: 14px 16px;
+    resize: vertical;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+
+  textarea:focus {
+    border-color: var(--accent);
+  }
+
+  textarea::placeholder {
+    color: var(--text-dim);
+  }
+
+  .error {
+    font-size: 0.72rem;
+    color: var(--accent2);
+    min-height: 18px;
+  }
+
+  .divider {
+    width: 100%;
+    max-width: 960px;
+    height: 1px;
+    background: var(--border);
+    margin: 28px 0;
+  }
+
+  #plot-container {
+    width: 100%;
+    max-width: 960px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    min-height: 520px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: border-color 0.3s;
+  }
+
+  #plot-container.has-plot {
+    border-color: #1e2330;
+  }
+
+  #plot {
+    width: 100%;
+    height: 560px;
+  }
+
+  .placeholder-text {
+    color: var(--text-dim);
+    font-size: 0.75rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .stats-bar {
+    width: 100%;
+    max-width: 960px;
+    display: none;
+    gap: 0;
+    border: 1px solid var(--border);
+    border-top: none;
+  }
+
+  .stats-bar.visible { display: flex; }
+
+  .stat {
+    flex: 1;
+    padding: 10px 16px;
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .stat:last-child { border-right: none; }
+
+  .stat-label {
+    font-size: 0.6rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+  }
+
+  .stat-value {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #1e2330;
+  }
+
+  .stat-value.neg { color: #ef4444; }
+  .stat-value.pos { color: #2563eb; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Bed Mesh Visualizer</h1>
+  <span>G29 T · 3D Surface</span>
+</header>
+
+<div class="input-section">
+  <div class="label-row">
+    <label>Paste G29 T output</label>
+    <div class="btn-row">
+      <button onclick="loadSample()">Load sample</button>
+      <button class="primary" onclick="render()">Render →</button>
+    </div>
+  </div>
+  <textarea id="input" placeholder="Paste your Bed Topography Report here..."></textarea>
+  <div class="error" id="error"></div>
+</div>
+
+<div class="divider"></div>
+
+<div id="plot-container">
+  <span class="placeholder-text">Visualization will appear here</span>
+  <div id="plot" style="display:none"></div>
+</div>
+
+<div class="stats-bar" id="stats-bar">
+  <div class="stat">
+    <span class="stat-label">Min Z</span>
+    <span class="stat-value neg" id="stat-min">—</span>
+  </div>
+  <div class="stat">
+    <span class="stat-label">Max Z</span>
+    <span class="stat-value pos" id="stat-max">—</span>
+  </div>
+  <div class="stat">
+    <span class="stat-label">Range</span>
+    <span class="stat-value" id="stat-range">—</span>
+  </div>
+  <div class="stat">
+    <span class="stat-label">Grid</span>
+    <span class="stat-value" id="stat-grid">—</span>
+  </div>
+  <div class="stat">
+    <span class="stat-label">Bed size</span>
+    <span class="stat-value" id="stat-size">—</span>
+  </div>
+</div>
+
+<script>
+const SAMPLE = `Bed Topography Report:
+    (  2,217)                                                                                                                                                      (248,217)
+        0       1       2       3       4       5       6       7       8       9      10      11      12      13      14      15      16      17      18      19      20
+20 | -0.172  -0.145  -0.114  -0.084  -0.054  -0.026  +0.001  +0.033  +0.074  +0.120  +0.166  +0.210  +0.254  +0.296  +0.336  +0.375  +0.416  +0.462  +0.511  +0.559  +0.603
+   |
+19 | -0.172  -0.143  -0.114  -0.085  -0.057  -0.030  -0.004  +0.027  +0.065  +0.107  +0.151  +0.197  +0.245  +0.291  +0.332  +0.372  +0.414  +0.458  +0.505  +0.551  +0.597
+   |
+18 | -0.168  -0.141  -0.114  -0.087  -0.060  -0.034  -0.008  +0.021  +0.056  +0.094  +0.137  +0.185  +0.236  +0.285  +0.329  +0.369  +0.411  +0.454  +0.498  +0.542  +0.587
+   |
+17 | -0.165  -0.139  -0.114  -0.089  -0.063  -0.038  -0.013  +0.016  +0.047  +0.082  +0.122  +0.172  +0.227  +0.280  +0.325  +0.367  +0.408  +0.450  +0.492  +0.534  +0.576
+   |
+16 | -0.164  -0.140  -0.117  -0.093  -0.069  -0.044  -0.019  +0.008  +0.038  +0.071  +0.110  +0.161  +0.218  +0.272  +0.318  +0.361  +0.403  +0.444  +0.484  +0.524  +0.565
+   |
+15 | -0.168  -0.146  -0.123  -0.101  -0.077  -0.053  -0.028  -0.000  +0.031  +0.065  +0.104  +0.154  +0.210  +0.263  +0.309  +0.352  +0.394  +0.435  +0.474  +0.514  +0.553
+   |
+14 | -0.175  -0.153  -0.132  -0.111  -0.088  -0.064  -0.039  -0.011  +0.023  +0.060  +0.101  +0.149  +0.201  +0.251  +0.297  +0.341  +0.383  +0.423  +0.463  +0.502  +0.541
+   |
+13 | -0.179  -0.160  -0.141  -0.122  -0.101  -0.079  -0.054  -0.025  +0.010  +0.050  +0.093  +0.139  +0.189  +0.237  +0.282  +0.326  +0.369  +0.409  +0.448  +0.487  +0.526
+   |
+12 | -0.177  -0.163  -0.148  -0.133  -0.116  -0.096  -0.073  -0.044  -0.008  +0.033  +0.077  +0.123  +0.171  +0.218  +0.264  +0.309  +0.352  +0.393  +0.431  +0.469  +0.508
+   |
+11 | -0.173  -0.164  -0.155  -0.146  -0.133  -0.116  -0.095  -0.068  -0.032  +0.011  +0.056  +0.101  +0.149  +0.196  +0.243  +0.289  +0.333  +0.373  +0.411  +0.449  +0.487
+   |
+10 | -0.176  -0.171  -0.167  -0.162  -0.153  -0.139  -0.120  -0.095  -0.059  -0.017  +0.027  +0.073  +0.120  +0.168  +0.216  +0.263  +0.308  +0.349  +0.387  +0.424  +0.462
+   |
+ 9 | -0.187  -0.185  -0.184  -0.183  -0.176  -0.164  -0.146  -0.122  -0.090  -0.051  -0.009  +0.036  +0.085  +0.134  +0.182  +0.230  +0.276  +0.317  +0.356  +0.395  +0.434
+   |
+ 8 | -0.204  -0.205  -0.206  -0.207  -0.203  -0.191  -0.174  -0.152  -0.125  -0.092  -0.053  -0.008  +0.043  +0.093  +0.143  +0.191  +0.238  +0.281  +0.321  +0.361  +0.402
+   |
+ 7 | -0.230  -0.232  -0.235  -0.238  -0.235  -0.225  -0.210  -0.189  -0.166  -0.138  -0.103  -0.058  -0.005  +0.047  +0.097  +0.147  +0.194  +0.238  +0.280  +0.322  +0.364
+   |
+ 6 | -0.267  -0.270  -0.273  -0.276  -0.275  -0.266  -0.254  -0.237  -0.217  -0.192  -0.160  -0.114  -0.059  -0.006  +0.044  +0.094  +0.142  +0.188  +0.232  +0.276  +0.320
+   |
+ 5 | -0.313  -0.316  -0.318  -0.321  -0.319  -0.314  -0.305  -0.291  -0.274  -0.253  -0.222  -0.175  -0.120  -0.065  -0.014  +0.036  +0.084  +0.132  +0.178  +0.224  +0.271
+   |
+ 4 | -0.364  -0.366  -0.368  -0.371  -0.370  -0.367  -0.360  -0.349  -0.335  -0.315  -0.285  -0.239  -0.182  -0.126  -0.075  -0.024  +0.026  +0.075  +0.124  +0.173  +0.222
+   |
+ 3 | -0.420  -0.423  -0.425  -0.428  -0.428  -0.426  -0.421  -0.411  -0.398  -0.379  -0.350  -0.304  -0.247  -0.191  -0.137  -0.084  -0.031  +0.021  +0.073  +0.124  +0.175
+   |
+ 2 | -0.482  -0.485  -0.488  -0.491  -0.492  -0.490  -0.486  -0.477  -0.464  -0.445  -0.416  -0.371  -0.315  -0.258  -0.202  -0.144  -0.088  -0.033  +0.021  +0.075  +0.129
+   |
+ 1 | -0.543 [-0.546] -0.550  -0.554  -0.555  -0.554  -0.551  -0.543  -0.529  -0.511  -0.482  -0.437  -0.382  -0.325  -0.266  -0.205  -0.145  -0.087  -0.030  +0.026  +0.083
+   |
+ 0 | -0.605  -0.608  -0.613  -0.617  -0.619  -0.619  -0.616  -0.608  -0.595  -0.577  -0.548  -0.504  -0.450  -0.392  -0.331  -0.266  -0.202  -0.141  -0.082  -0.022  +0.032
+        0       1       2       3       4       5       6       7       8       9      10      11      12      13      14      15      16      17      18      19      20
+    (  2,  3)                                                                                                                                                      (248,  3)
+ok`;
+
+function loadSample() {
+  document.getElementById('input').value = SAMPLE;
+  render();
+}
+
+function setError(msg) {
+  document.getElementById('error').textContent = msg;
+}
+
+function parseMesh(text) {
+  setError('');
+
+  const coordPattern = /\(\s*(\d+),\s*(\d+)\)/g;
+  const coords = [...text.matchAll(coordPattern)].map(m => [+m[1], +m[2]]);
+  if (coords.length < 4) throw new Error('Could not find corner coordinates.');
+
+  const xMin = coords[0][0], yMax = coords[0][1];
+  const xMax = coords[1][0];
+  const yMin = coords[2][1];
+
+  const rowPattern = /^\s*(\d+)\s*\|(.+)$/gm;
+  const rows = {};
+  for (const m of text.matchAll(rowPattern)) {
+    const idx = +m[1];
+    const raw = m[2].replace(/[\[\]]/g, '');
+    const vals = [...raw.matchAll(/[+-]?\d+\.\d+/g)].map(v => +v[0]);
+    if (vals.length) rows[idx] = vals;
+  }
+
+  const sortedKeys = Object.keys(rows).map(Number).sort((a, b) => a - b);
+  if (!sortedKeys.length) throw new Error('No data rows found.');
+
+  const grid = sortedKeys.map(k => rows[k]); // [y][x], y=0 at front
+  return { grid, xMin, xMax, yMin, yMax };
+}
+
+function render() {
+  const text = document.getElementById('input').value.trim();
+  if (!text) { setError('Paste a G29 T report first.'); return; }
+
+  let parsed;
+  try { parsed = parseMesh(text); }
+  catch (e) { setError(e.message); return; }
+
+  const { grid, xMin, xMax, yMin, yMax } = parsed;
+  const nY = grid.length;
+  const nX = grid[0].length;
+
+  const xs = Array.from({length: nX}, (_, i) => xMin + (xMax - xMin) * i / (nX - 1));
+  const ys = Array.from({length: nY}, (_, i) => yMin + (yMax - yMin) * i / (nY - 1));
+
+  const zMin = Math.min(...grid.flat());
+  const zMax = Math.max(...grid.flat());
+  const zRange = zMax - zMin;
+
+  // Build hover text
+  const hovertext = grid.map((row, iy) =>
+    row.map((z, ix) =>
+      `X: ${xs[ix].toFixed(0)} mm<br>Y: ${ys[iy].toFixed(0)} mm<br>Z: ${z >= 0 ? '+' : ''}${z.toFixed(3)} mm`
+    )
+  );
+
+  const surface = {
+    type: 'surface',
+    x: xs,
+    y: ys,
+    z: grid,
+    hoverinfo: 'text',
+    hovertext,
+    colorbar: {
+      title: { text: 'Z offset (mm)', font: { color: '#1e2330', size: 11 } },
+      tickfont: { color: '#1e2330', size: 10 },
+      thickness: 14,
+      len: 0.6,
+    },
+    contours: {
+      z: { show: true, usecolormap: true, highlightcolor: '#00ff00', project: { z: false } }
+    },
+    lighting: { ambient: 0.7, diffuse: 0.6, specular: 0.3, roughness: 0.5 },
+  };
+
+  const xySpan = Math.max(xMax - xMin, yMax - yMin);
+  const layout = {
+    font: { family: 'JetBrains Mono, monospace', color: '#1e2330' },
+    margin: { l: 0, r: 0, t: 20, b: 0 },
+    scene: {
+      bgcolor: '#f4f5f7',
+      xaxis: {
+        title: { text: 'X (mm)', font: { size: 11 } },
+        gridcolor: '#dde1e9', zerolinecolor: '#b0b8cc',
+        tickfont: { size: 9 },
+      },
+      yaxis: {
+        title: { text: 'Y (mm)', font: { size: 11 } },
+        gridcolor: '#dde1e9', zerolinecolor: '#b0b8cc',
+        tickfont: { size: 9 },
+      },
+      zaxis: {
+        title: { text: 'Z offset (mm)', font: { size: 11 } },
+        gridcolor: '#dde1e9', zerolinecolor: '#2563eb',
+        tickfont: { size: 9 },
+      },
+      aspectmode: 'manual',
+      aspectratio: {
+        x: (xMax - xMin) / xySpan,
+        y: (yMax - yMin) / xySpan,
+        z: (zRange / xySpan) * 100,
+      },
+      camera: { eye: { x: -0.024, y: -1.37, z: 0.67 } },
+      // if you want different camera, paste this to browser console:
+      // document.querySelector('.js-plotly-plot')._fullLayout.scene._scene.getCamera()
+    },
+  };
+
+  const plotEl = document.getElementById('plot');
+  const container = document.getElementById('plot-container');
+  const placeholder = container.querySelector('.placeholder-text');
+
+  plotEl.style.display = 'block';
+  if (placeholder) placeholder.style.display = 'none';
+  container.classList.add('has-plot');
+
+  Plotly.react('plot', [surface], layout, { responsive: true, displaylogo: false });
+
+  // Stats bar
+  document.getElementById('stat-min').textContent = (zMin >= 0 ? '+' : '') + zMin.toFixed(3) + ' mm';
+  document.getElementById('stat-max').textContent = (zMax >= 0 ? '+' : '') + zMax.toFixed(3) + ' mm';
+  document.getElementById('stat-range').textContent = zRange.toFixed(3) + ' mm';
+  document.getElementById('stat-grid').textContent = `${nX} × ${nY}`;
+  document.getElementById('stat-size').textContent = `${xMax - xMin} × ${yMax - yMin} mm`;
+  document.getElementById('stats-bar').classList.add('visible');
+}
+
+document.getElementById('input').addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') render();
+});
+</script>
+</body>
+</html>
