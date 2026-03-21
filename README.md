@@ -135,7 +135,7 @@ will get you interactive UI with matplotlib:
 
 ### Using plotly in a browser
 
-Opening `bedivz.html` in your browser and plopping in your data into the text field
+Opening `bedviz.html` in your browser and plopping in your data into the text field
 will give you HTML visualizer using plotly javascript library:
 
 ![plotly ui](https://raw.githubusercontent.com/wejn/prusa-mbl/master/screenshots/plotly.png)
