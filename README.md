@@ -39,6 +39,9 @@ out a text files with the mesh in two formats:
 - `gcode_G29_T0_{TIMESTAMP}.txt` as the default (use for the visualizer)
 - `gcode_G29_T1_{TIMESTAMP}.txt` as CSV-friendly
 
+The default code was fished out of default bootstrap gcode that PrusaSlicer
+2.9.4 generated for my Core One +.
+
 
 ### Running custom gcode
 
