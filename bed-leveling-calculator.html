@@ -1,0 +1,726 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bed Leveling Calculator</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/plotly.js/2.27.0/plotly.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&family=Syne:wght@400;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:      #f5f4f1;
+    --surface: #ffffff;
+    --border:  #dddbd6;
+    --border2: #c8c5be;
+    --accent:  #1a6e4a;
+    --accent2: #1a5fa8;
+    --warn:    #c0440f;
+    --text:    #1e1e1e;
+    --dim:     #7a7670;
+    --mono:    'JetBrains Mono', monospace;
+    --sans:    'Syne', sans-serif;
+    --pos:     #1a6e4a;
+    --neg:     #c0440f;
+    --pos-bg:  #eaf5ef;
+    --neg-bg:  #fdf0ea;
+    --ref-bg:  #eef3fb;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 13px;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background-image:
+      linear-gradient(var(--border) 1px, transparent 1px),
+      linear-gradient(90deg, var(--border) 1px, transparent 1px);
+    background-size: 40px 40px;
+    opacity: 0.5;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  #app {
+    position: relative; z-index: 1;
+    display: grid;
+    grid-template-columns: 380px 1fr;
+    grid-template-rows: auto 1fr;
+    min-height: 100vh;
+  }
+
+  /* ── HEADER ── */
+  header {
+    grid-column: 1 / -1;
+    padding: 18px 28px 14px;
+    border-bottom: 2px solid var(--border);
+    background: var(--surface);
+    display: flex; align-items: baseline; gap: 14px;
+  }
+  header h1 {
+    font-family: var(--sans);
+    font-size: 20px; font-weight: 800;
+    letter-spacing: -0.5px;
+    color: var(--text);
+  }
+  header .tag {
+    font-size: 9px; font-weight: 700;
+    letter-spacing: 2px;
+    color: var(--accent);
+    text-transform: uppercase;
+    border: 1.5px solid var(--accent);
+    padding: 2px 7px;
+    border-radius: 2px;
+  }
+
+  /* ── LEFT PANEL ── */
+  #panel {
+    border-right: 1px solid var(--border);
+    background: var(--surface);
+    padding: 20px;
+    display: flex; flex-direction: column; gap: 20px;
+    overflow-y: auto;
+    max-height: calc(100vh - 56px);
+  }
+
+  .section-label {
+    font-size: 9px; letter-spacing: 3px; text-transform: uppercase;
+    color: var(--dim); margin-bottom: 10px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .section-label::after {
+    content: ''; flex: 1; height: 1px; background: var(--border);
+  }
+
+  .susp-row {
+    display: grid; grid-template-columns: 28px 1fr 1fr; gap: 6px;
+    align-items: center; margin-bottom: 6px;
+  }
+  .susp-row .lbl {
+    font-size: 11px; font-weight: 700; color: var(--accent);
+    text-align: center;
+    background: var(--pos-bg);
+    border: 1.5px solid #b6ddc9;
+    border-radius: 3px;
+    padding: 6px 0;
+  }
+
+  .mesh-table-wrap { overflow-x: auto; }
+  .mesh-table { border-collapse: collapse; width: 100%; }
+  .mesh-table th {
+    font-size: 10px; letter-spacing: 1px; color: var(--dim);
+    padding: 4px 6px; text-align: center;
+    border-bottom: 1px solid var(--border);
+  }
+  .mesh-table td { padding: 3px 4px; text-align: center; }
+  .mesh-table td.y-lbl {
+    font-size: 10px; color: var(--dim); padding-right: 8px; white-space: nowrap;
+  }
+
+  input[type="number"] {
+    background: var(--bg);
+    border: 1px solid var(--border2);
+    border-radius: 3px;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 12px;
+    padding: 6px 8px;
+    width: 100%;
+    outline: none;
+    transition: border-color .15s;
+    -moz-appearance: textfield;
+  }
+  input[type="number"]::-webkit-inner-spin-button,
+  input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; }
+  input[type="number"]:focus { border-color: var(--accent); }
+  input[type="number"].z-input {
+    background: #f0faf5;
+    border-color: #b6ddc9;
+    color: #1a6e4a;
+    font-weight: 500;
+  }
+  input[type="number"].z-input:focus { border-color: var(--accent); }
+  input[type="number"].xy-input { color: var(--dim); }
+
+  .tol-row { display: flex; align-items: center; gap: 10px; }
+  .tol-row label { color: var(--dim); font-size: 11px; white-space: nowrap; }
+  .tol-row input { max-width: 100px; }
+
+  #calcBtn {
+    background: var(--accent);
+    color: #fff;
+    border: none; border-radius: 3px;
+    font-family: var(--sans);
+    font-size: 13px; font-weight: 700;
+    letter-spacing: 1px;
+    padding: 12px;
+    cursor: pointer;
+    width: 100%;
+    text-transform: uppercase;
+    transition: opacity .15s, transform .1s;
+  }
+  #calcBtn:hover { opacity: .88; }
+  #calcBtn:active { transform: scale(.98); }
+
+  /* ── RIGHT PANEL ── */
+  #right { display: flex; flex-direction: column; overflow: hidden; }
+
+  #solutions-bar {
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    display: flex; flex-direction: column;
+    max-height: 200px; flex-shrink: 0;
+  }
+  #solutions-bar .bar-header {
+    padding: 9px 18px 7px;
+    font-size: 9px; letter-spacing: 3px; text-transform: uppercase;
+    color: var(--dim);
+    display: flex; align-items: center; justify-content: space-between;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  #solutions-bar .bar-header span.count { color: var(--accent); font-size: 11px; font-weight: 700; }
+
+  #sol-list { overflow-y: auto; flex: 1; }
+
+  .sol-item {
+    display: grid;
+    grid-template-columns: 32px 1fr auto;
+    align-items: center;
+    padding: 7px 18px;
+    cursor: pointer;
+    border-bottom: 1px solid var(--border);
+    transition: background .1s;
+  }
+  .sol-item:hover { background: #f0ede8; }
+  .sol-item.active { background: var(--pos-bg); border-left: 3px solid var(--accent); padding-left: 15px; }
+
+  .sol-rank { font-size: 10px; color: var(--dim); }
+  .sol-item.active .sol-rank { color: var(--accent); font-weight: 700; }
+  .sol-info { min-width: 0; }
+  .sol-refs { font-size: 10px; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .sol-susp { font-size: 11px; color: var(--text); font-family: var(--mono); }
+  .sol-lift { font-size: 12px; font-weight: 700; color: var(--accent2); text-align: right; white-space: nowrap; padding-left: 12px; }
+
+  #no-solutions { padding: 20px 18px; color: var(--warn); font-size: 11px; }
+
+  /* ── DETAIL + PLOT AREA ── */
+  #detail-plot {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 300px 1fr;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  /* ── DETAIL PANEL ── */
+  #detail {
+    border-right: 1px solid var(--border);
+    background: var(--surface);
+    overflow-y: auto;
+    padding: 16px;
+    display: flex; flex-direction: column; gap: 16px;
+  }
+  #detail-placeholder {
+    color: var(--dim); font-size: 11px;
+    display: flex; align-items: center; justify-content: center;
+    height: 100%;
+  }
+
+  /* result tables */
+  .result-section { display: flex; flex-direction: column; gap: 8px; }
+  .result-table {
+    border-collapse: collapse;
+    width: 100%;
+    font-size: 11px;
+  }
+  .result-table th {
+    font-size: 9px; letter-spacing: 1.5px; text-transform: uppercase;
+    color: var(--dim); padding: 4px 8px; text-align: center;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg);
+  }
+  .result-table th.row-header { text-align: left; }
+  .result-table td {
+    padding: 5px 8px; text-align: center;
+    border-bottom: 1px solid var(--border);
+    font-family: var(--mono);
+  }
+  .result-table td.row-header {
+    text-align: left; color: var(--dim); font-size: 10px;
+    white-space: nowrap; background: var(--bg);
+  }
+  .result-table td.val-pos { color: var(--pos); background: var(--pos-bg); font-weight: 500; }
+  .result-table td.val-neg { color: var(--neg); background: var(--neg-bg); font-weight: 500; }
+  .result-table td.val-zero { color: var(--dim); }
+  .result-table td.val-ref { color: var(--accent2); background: var(--ref-bg); font-weight: 500; }
+
+  /* ── PLOT AREA ── */
+  #plot-wrap { flex: 1; position: relative; min-height: 0; }
+  #plot { width: 100%; height: 100%; }
+  #plot-placeholder {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    flex-direction: column; gap: 10px;
+    color: var(--dim);
+  }
+  #plot-placeholder .big { font-size: 44px; opacity: .12; }
+  #plot-placeholder p { font-size: 11px; letter-spacing: 1px; }
+
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <header>
+    <h1>Bed Leveling Calculator</h1>
+    <span class="tag">3-Point Suspension</span>
+  </header>
+
+  <!-- ── LEFT PANEL ── -->
+  <div id="panel">
+
+    <div>
+      <div class="section-label">Suspension Points</div>
+      <div id="susp-inputs">
+        <div class="susp-row">
+          <div class="lbl">S1</div>
+          <input type="number" step="any" id="s1x" value="-28.1" placeholder="X">
+          <input type="number" step="any" id="s1y" value="-37.2" placeholder="Y">
+        </div>
+        <div class="susp-row">
+          <div class="lbl">S2</div>
+          <input type="number" step="any" id="s2x" value="290.91" placeholder="X">
+          <input type="number" step="any" id="s2y" value="-37.2" placeholder="Y">
+        </div>
+        <div class="susp-row">
+          <div class="lbl">S3</div>
+          <input type="number" step="any" id="s3x" value="125" placeholder="X">
+          <input type="number" step="any" id="s3y" value="274.3" placeholder="Y">
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="section-label">Mesh Points</div>
+      <div class="mesh-table-wrap">
+        <table class="mesh-table" id="mesh-table">
+          <thead>
+            <tr id="mesh-thead-row">
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="mesh-body"></tbody>
+        </table>
+      </div>
+      <div style="margin-top:8px;font-size:10px;color:var(--dim);">
+        Gray = X/Y coords &nbsp;·&nbsp; <span style="color:var(--accent);font-weight:600">Green</span> = Z measurement
+      </div>
+    </div>
+
+    <div>
+      <div class="section-label">Settings</div>
+      <div class="tol-row">
+        <label>Shim tolerance (min)</label>
+        <input type="number" step="any" id="tolerance" value="-0.025">
+      </div>
+    </div>
+
+    <button id="calcBtn" onclick="calculate()">Calculate</button>
+
+  </div>
+
+  <!-- ── RIGHT PANEL ── -->
+  <div id="right">
+
+    <div id="solutions-bar">
+      <div class="bar-header">
+        <span>Solutions</span>
+        <span class="count" id="sol-count">—</span>
+      </div>
+      <div id="sol-list">
+        <div id="no-solutions" style="display:none;">No valid solutions found with current settings.</div>
+      </div>
+    </div>
+
+    <div id="detail-plot">
+
+      <!-- detail tables -->
+      <div id="detail">
+        <div id="detail-placeholder">Select a solution</div>
+        <div id="detail-content" style="display:none; flex-direction:column; gap:16px;">
+
+          <div class="result-section">
+            <div class="section-label">Suspension Adjustments</div>
+            <table class="result-table" id="susp-result-table">
+              <thead>
+                <tr>
+                  <th class="row-header">Point</th>
+                  <th>X</th><th>Y</th><th>Δ Z lift</th>
+                </tr>
+              </thead>
+              <tbody id="susp-result-body"></tbody>
+            </table>
+          </div>
+
+          <div class="result-section">
+            <div class="section-label">Shim Distances</div>
+            <table class="result-table" id="shim-result-table">
+              <thead id="shim-result-thead"></thead>
+              <tbody id="shim-result-body"></tbody>
+            </table>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- plot -->
+      <div id="plot-wrap">
+        <div id="plot-placeholder">
+          <div class="big">⬡</div>
+          <p>Configure inputs and press Calculate</p>
+        </div>
+        <div id="plot" style="display:none;"></div>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+
+<script>
+const DEFAULT_X = [15, 125, 230];
+const DEFAULT_Y = [220, 115, 10];
+const DEFAULT_Z = [
+  [ 0.203,  0.311,  0.602],
+  [ 0.102,  0.147,  0.464],
+  [-0.338, -0.378,  0.009],
+];
+
+(function buildMeshTable() {
+  const thead = document.getElementById('mesh-thead-row');
+  const tbody = document.getElementById('mesh-body');
+  DEFAULT_X.forEach(x => {
+    const th = document.createElement('th');
+    th.innerHTML = `<input type="number" step="any" class="xy-input mx-input" value="${x}" style="width:58px;text-align:center;">`;
+    thead.appendChild(th);
+  });
+  DEFAULT_Y.forEach((y, ri) => {
+    const tr = document.createElement('tr');
+    const tdY = document.createElement('td');
+    tdY.className = 'y-lbl';
+    tdY.innerHTML = `<input type="number" step="any" class="xy-input my-input" value="${y}" style="width:50px;">`;
+    tr.appendChild(tdY);
+    DEFAULT_X.forEach((x, ci) => {
+      const td = document.createElement('td');
+      td.innerHTML = `<input type="number" step="any" class="z-input mz-input" value="${DEFAULT_Z[ri][ci]}" style="width:62px;">`;
+      tr.appendChild(td);
+    });
+    tbody.appendChild(tr);
+  });
+})();
+
+function getMeshX() { return Array.from(document.querySelectorAll('.mx-input')).map(i => parseFloat(i.value)); }
+function getMeshY() { return Array.from(document.querySelectorAll('.my-input')).map(i => parseFloat(i.value)); }
+function getMeshZ() {
+  const zInputs = Array.from(document.querySelectorAll('.mz-input'));
+  const nx = getMeshX().length, ny = getMeshY().length;
+  return Array.from({length: ny}, (_, r) => Array.from({length: nx}, (_, c) => parseFloat(zInputs[r*nx+c].value)));
+}
+function getSuspension() {
+  return [
+    [parseFloat(document.getElementById('s1x').value), parseFloat(document.getElementById('s1y').value)],
+    [parseFloat(document.getElementById('s2x').value), parseFloat(document.getElementById('s2y').value)],
+    [parseFloat(document.getElementById('s3x').value), parseFloat(document.getElementById('s3y').value)],
+  ];
+}
+
+function planeThroughThree(p1, p2, p3) {
+  const mat = [[p1[0],p1[1],1],[p2[0],p2[1],1],[p3[0],p3[1],1]];
+  const rhs = [p1[2], p2[2], p3[2]];
+  const det = m =>
+    m[0][0]*(m[1][1]*m[2][2]-m[1][2]*m[2][1])
+   -m[0][1]*(m[1][0]*m[2][2]-m[1][2]*m[2][0])
+   +m[0][2]*(m[1][0]*m[2][1]-m[1][1]*m[2][0]);
+  const d = det(mat);
+  if (Math.abs(d) < 1e-10) return null;
+  const sub = (col,v) => mat.map((row,i) => row.map((val,j) => j===col ? v[i] : val));
+  return [det(sub(0,rhs))/d, det(sub(1,rhs))/d, det(sub(2,rhs))/d];
+}
+
+function evalPlane([a,b,c], x, y) { return a*x + b*y + c; }
+
+function combinations(arr, k) {
+  const res = [];
+  function go(s, combo) {
+    if (combo.length === k) { res.push([...combo]); return; }
+    for (let i = s; i < arr.length; i++) { combo.push(arr[i]); go(i+1, combo); combo.pop(); }
+  }
+  go(0, []);
+  return res;
+}
+
+let allResults = [], meshX, meshY, meshZ, suspension, tolerance;
+
+function calculate() {
+  suspension = getSuspension();
+  meshX = getMeshX();
+  meshY = getMeshY();
+  meshZ = getMeshZ();
+  tolerance = parseFloat(document.getElementById('tolerance').value);
+
+  const meshPoints = [];
+  meshY.forEach((y, ri) => meshX.forEach((x, ci) => meshPoints.push([x, y, meshZ[ri][ci]])));
+
+  allResults = [];
+  for (const triple of combinations(meshPoints.map((_,i)=>i), 3)) {
+    const abc = planeThroughThree(...triple.map(i => meshPoints[i]));
+    if (!abc) continue;
+    const [a, b, c] = abc;
+    const tiltAtSusp = suspension.map(([sx,sy]) => a*sx + b*sy);
+    const k = Math.max(...tiltAtSusp);
+    const suspAdj = tiltAtSusp.map(t => k - t);
+    if (suspAdj.some(v => v < -1e-9)) continue;
+    const shims = meshPoints.map(([mx,my,mz]) => evalPlane(abc, mx, my) - mz);
+    if (shims.some(s => s < tolerance - 1e-9)) continue;
+    const levelZ = c + k;
+    const totalLift = suspAdj.reduce((a,b)=>a+b,0) + shims.filter(s=>s>0).reduce((a,b)=>a+b,0);
+    allResults.push({ triple, suspAdj, shims, totalLift, levelZ, abc, meshPoints });
+  }
+  allResults.sort((a,b) => a.totalLift - b.totalLift);
+  renderSolutions();
+}
+
+function renderSolutions() {
+  const list = document.getElementById('sol-list');
+  const noSol = document.getElementById('no-solutions');
+  document.getElementById('sol-count').textContent = allResults.length + ' found';
+  Array.from(list.querySelectorAll('.sol-item')).forEach(el => el.remove());
+  noSol.style.display = 'none';
+  if (allResults.length === 0) { noSol.style.display = ''; return; }
+
+  allResults.forEach((r, idx) => {
+    const item = document.createElement('div');
+    item.className = 'sol-item';
+    item.dataset.idx = idx;
+    const refs = r.triple.map(i => {
+      const col = i % meshX.length, row = Math.floor(i / meshX.length);
+      return `(${meshX[col]},${meshY[row]})`;
+    }).join(' · ');
+    const suspStr = r.suspAdj.map(v => '+' + v.toFixed(3)).join('  ');
+    item.innerHTML = `
+      <div class="sol-rank">#${idx+1}</div>
+      <div class="sol-info">
+        <div class="sol-refs">${refs}</div>
+        <div class="sol-susp">${suspStr}</div>
+      </div>
+      <div class="sol-lift">${r.totalLift.toFixed(4)}</div>
+    `;
+    item.onclick = () => selectSolution(idx);
+    list.appendChild(item);
+  });
+  selectSolution(0);
+}
+
+function selectSolution(idx) {
+  document.querySelectorAll('.sol-item').forEach(el => el.classList.remove('active'));
+  const el = document.querySelector(`.sol-item[data-idx="${idx}"]`);
+  if (el) { el.classList.add('active'); el.scrollIntoView({block:'nearest'}); }
+  renderDetail(allResults[idx]);
+  renderPlot(allResults[idx]);
+}
+
+function valClass(v, isRef) {
+  if (isRef) return 'val-ref';
+  if (Math.abs(v) < 1e-6) return 'val-zero';
+  return v > 0 ? 'val-pos' : 'val-neg';
+}
+
+function renderDetail(r) {
+  document.getElementById('detail-placeholder').style.display = 'none';
+  const dc = document.getElementById('detail-content');
+  dc.style.display = 'flex';
+
+  // ── Suspension table ──
+  const sb = document.getElementById('susp-result-body');
+  sb.innerHTML = '';
+  suspension.forEach(([sx,sy], i) => {
+    const v = r.suspAdj[i];
+    const cls = valClass(v, false);
+    sb.innerHTML += `<tr>
+      <td class="row-header">S${i+1}</td>
+      <td>${sx}</td><td>${sy}</td>
+      <td class="${cls}">${v < 1e-6 ? '0.000' : '+'+v.toFixed(4)}</td>
+    </tr>`;
+  });
+
+  // ── Shim table ──
+  const refSet = new Set(r.triple);
+  const nx = meshX.length, ny = meshY.length;
+
+  const thead = document.getElementById('shim-result-thead');
+  thead.innerHTML = '<tr><th class="row-header">Y \\ X</th>' +
+    meshX.map(x => `<th>${x}</th>`).join('') + '</tr>';
+
+  const tbody = document.getElementById('shim-result-body');
+  tbody.innerHTML = '';
+  for (let ri = 0; ri < ny; ri++) {
+    let row = `<tr><td class="row-header">y=${meshY[ri]}</td>`;
+    for (let ci = 0; ci < nx; ci++) {
+      const idx = ri * nx + ci;
+      const v = r.shims[idx];
+      const isRef = refSet.has(idx);
+      const cls = valClass(v, isRef);
+      const label = isRef ? 'ref' : ((v >= 0 ? '+' : '') + v.toFixed(4));
+      row += `<td class="${cls}" title="${v.toFixed(5)}">${label}</td>`;
+    }
+    row += '</tr>';
+    tbody.innerHTML += row;
+  }
+}
+
+function renderPlot(r) {
+  document.getElementById('plot-placeholder').style.display = 'none';
+  const plotEl = document.getElementById('plot');
+  plotEl.style.display = 'block';
+
+  function makeSurface(zFn, colorscale, name, opacity) {
+    return {
+      type: 'surface', x: meshX, y: meshY,
+      z: meshY.map(y => meshX.map(x => zFn(x, y))),
+      name, opacity, colorscale, showscale: false,
+      contours: { z: { show: false } }, hoverinfo: 'skip',
+    };
+  }
+
+  function leastSquaresPlane(pts) {
+    let sx=0,sy=0,sz=0,sxx=0,sxy=0,syy=0,sxz=0,syz=0, n=pts.length;
+    for (const [x,y,z] of pts) { sx+=x;sy+=y;sz+=z;sxx+=x*x;sxy+=x*y;syy+=y*y;sxz+=x*z;syz+=y*z; }
+    const mat = [[sxx,sxy,sx],[sxy,syy,sy],[sx,sy,n]];
+    const rhs = [sxz,syz,sz];
+    const det3 = m => m[0][0]*(m[1][1]*m[2][2]-m[1][2]*m[2][1])-m[0][1]*(m[1][0]*m[2][2]-m[1][2]*m[2][0])+m[0][2]*(m[1][0]*m[2][1]-m[1][1]*m[2][0]);
+    const sub = (col,v) => mat.map((row,i)=>row.map((val,j)=>j===col?v[i]:val));
+    const d = det3(mat);
+    return [det3(sub(0,rhs))/d, det3(sub(1,rhs))/d, det3(sub(2,rhs))/d];
+  }
+
+  const rawPts = r.meshPoints;
+  const oldAbc = leastSquaresPlane(rawPts);
+  const allZ = rawPts.map(p => p[2]);
+  const zMin = Math.min(...allZ) - 0.05, zMax = Math.max(...allZ) + 0.05;
+  const shimVals = r.shims;
+  const mpx = rawPts.map(p=>p[0]), mpy = rawPts.map(p=>p[1]), mpz = rawPts.map(p=>p[2]);
+  const sx = suspension.map(s=>s[0]), sy = suspension.map(s=>s[1]);
+
+  const traces = [];
+
+  traces.push({ ...makeSurface((x,y) => evalPlane(oldAbc,x,y),
+    [[0,'rgba(160,150,140,0)'],[1,'rgba(160,150,140,0.3)']],
+    'Original plane', 0.35), showlegend:true });
+
+  traces.push({ ...makeSurface((x,y) => r.levelZ,
+    [[0,'rgba(26,110,74,0)'],[1,'rgba(26,110,74,0.35)']],
+    'Leveled plane', 0.35), showlegend:true });
+
+  traces.push({
+    type:'scatter3d', mode:'markers+text',
+    x:mpx, y:mpy, z:mpz,
+    name:'Mesh (original Z)',
+    text: mpz.map(z=>z.toFixed(3)),
+    textposition:'top center',
+    textfont:{size:9, color:'#444', family:'JetBrains Mono'},
+    marker:{
+      size:7, color:mpz,
+      colorscale:[[0,'#1a5fa8'],[0.5,'#aaa'],[1,'#c0440f']],
+      cmin:zMin, cmax:zMax,
+      line:{color:'#fff',width:0.5},
+      showscale:true,
+      colorbar:{title:{text:'Z',font:{color:'#666',size:10}},tickfont:{color:'#666',size:9},len:0.5,y:0.25,thickness:10,x:1.01},
+    },
+    hovertemplate:'x=%{x}, y=%{y}<br>Z=%{z:.4f}<extra>Mesh</extra>',
+  });
+
+  for (let i = 0; i < rawPts.length; i++) {
+    const [mx,my,mz] = rawPts[i];
+    traces.push({
+      type:'scatter3d', mode:'lines',
+      x:[mx,mx], y:[my,my], z:[mz, r.levelZ],
+      showlegend:false, hoverinfo:'skip',
+      line:{color: shimVals[i] < 0 ? '#c0440f' : '#1a6e4a', width:3, dash: shimVals[i] < 0 ? 'dot' : 'solid'},
+    });
+  }
+
+  traces.push({
+    type:'scatter3d', mode:'markers+text',
+    x:mpx, y:mpy, z:rawPts.map(()=>r.levelZ),
+    name:'Mesh (leveled)',
+    text: shimVals.map(s=>(s>=0?'+':'')+s.toFixed(3)),
+    textposition:'top center',
+    textfont:{size:9, color:'#1a6e4a', family:'JetBrains Mono'},
+    marker:{size:6, color:shimVals,
+      colorscale:[[0,'#c0440f'],[0.5,'#aaa'],[1,'#1a6e4a']],
+      line:{color:'#1a6e4a',width:1}, symbol:'diamond'},
+    hovertemplate:'x=%{x}, y=%{y}<br>Shim=%{text}<extra>Leveled</extra>',
+  });
+
+  traces.push({
+    type:'scatter3d', mode:'markers+text',
+    x:sx, y:sy, z:[0,0,0],
+    name:'Suspension (orig.)',
+    text:['S1','S2','S3'], textposition:'top center',
+    textfont:{size:10, color:'#888', family:'JetBrains Mono'},
+    marker:{size:10, color:'#aaa', symbol:'square', line:{color:'#555',width:1}},
+    hovertemplate:'%{text}<br>x=%{x}, y=%{y}<br>Z=0<extra>Susp orig</extra>',
+  });
+
+  traces.push({
+    type:'scatter3d', mode:'markers+text',
+    x:sx, y:sy, z:r.suspAdj,
+    name:'Suspension (adj.)',
+    text: suspension.map((s,i)=>`S${i+1} +${r.suspAdj[i].toFixed(3)}`),
+    textposition:'top center',
+    textfont:{size:10, color:'#1a6e4a', family:'JetBrains Mono'},
+    marker:{size:10, color:'#1a6e4a', symbol:'square', line:{color:'#fff',width:1}},
+    hovertemplate:'%{text}<br>x=%{x}, y=%{y}<br>Adj=%{z:.4f}<extra>Susp adj</extra>',
+  });
+
+  for (let i = 0; i < 3; i++) {
+    traces.push({
+      type:'scatter3d', mode:'lines',
+      x:[sx[i],sx[i]], y:[sy[i],sy[i]], z:[0, r.suspAdj[i]],
+      showlegend:false, hoverinfo:'skip',
+      line:{color:'#1a6e4a', width:2, dash:'dash'},
+    });
+  }
+
+  Plotly.react(plotEl, traces, {
+    paper_bgcolor:'rgba(0,0,0,0)',
+    plot_bgcolor:'rgba(0,0,0,0)',
+    margin:{l:0,r:0,t:0,b:0},
+    legend:{font:{color:'#444',size:10,family:'JetBrains Mono'},
+      bgcolor:'rgba(255,255,255,0.9)',bordercolor:'#ddd',borderwidth:1,x:0,y:1},
+    scene:{
+      bgcolor:'rgba(0,0,0,0)',
+      xaxis:{title:'X',titlefont:{color:'#777',size:10},gridcolor:'#ddd',zerolinecolor:'#bbb',tickfont:{color:'#777',size:9}},
+      yaxis:{title:'Y',titlefont:{color:'#777',size:10},gridcolor:'#ddd',zerolinecolor:'#bbb',tickfont:{color:'#777',size:9}},
+      zaxis:{title:'Z',titlefont:{color:'#777',size:10},gridcolor:'#ddd',zerolinecolor:'#bbb',tickfont:{color:'#777',size:9}},
+      // camera:{eye:{x:1.4,y:-1.6,z:1.0}},
+      camera: { eye: {x: -0.06, y: -2.2, z: 1.48} },
+    },
+  }, {responsive:true, displayModeBar:true, modeBarButtonsToRemove:['toImage'], displaylogo:false});
+}
+</script>
+</body>
+</html>
