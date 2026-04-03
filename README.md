@@ -31,10 +31,10 @@ with a payload you want to execute.
 E.g.:
 
 ``` sh
-$ python run_gcode.py /dev/ttyACM0 115200 mbl-default.gcode
+$ python run_gcode.py /dev/ttyACM0 115200 mbl-60c.gcode
 ```
 
-The `mbl-default.gcode` executes the default gcode (see the file for details)
+The `mbl-60c.gcode` executes the default gcode (see the file for details)
 and dumps out three text files with the mesh, in two formats:
 - `gcode_G29_T_{TIMESTAMP}.txt` the sparse mesh (actual points measured)
 - `gcode_G29_T0_{TIMESTAMP}.txt` as the default (use for the visualizer)
@@ -42,6 +42,8 @@ and dumps out three text files with the mesh, in two formats:
 
 The default code was fished out of default bootstrap gcode that PrusaSlicer
 2.9.4 generated for my Core One +. It uses 60°C bed.
+
+There are other variants for other bed temps: `mbl-40c.gcode`, `mbl-80c.gcode`.
 
 If you want mesh without any heat up (completely cold), run `mbl-cold.gcode`
 instead.
