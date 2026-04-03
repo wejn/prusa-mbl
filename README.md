@@ -25,21 +25,28 @@ In order to dump bed mesh data, I've created the `run_gcode.py` utility.
 Requires python's serial package (`python3-serial` on Debian, `py3-pyserial`
 on alpine, `pyserial` via pip).
 
-To use it, you simply run it against your printer, from a Linux distro.
+To use it, you simply run it against your printer, from a Linux distro,
+with a payload you want to execute.
 
 E.g.:
 
 ``` sh
-$ python run_gcode.py /dev/ttyACM0 115200
+$ python run_gcode.py /dev/ttyACM0 115200 mbl-default.gcode
 ```
 
-It executes the default gcode (see the source for details) and dumps
-out a text files with the mesh in two formats:
+The `mbl-default.gcode` executes the default gcode (see the file for details)
+and dumps out three text files with the mesh, in two formats:
+- `gcode_G29_T_{TIMESTAMP}.txt` the sparse mesh (actual points measured)
 - `gcode_G29_T0_{TIMESTAMP}.txt` as the default (use for the visualizer)
 - `gcode_G29_T1_{TIMESTAMP}.txt` as CSV-friendly
 
 The default code was fished out of default bootstrap gcode that PrusaSlicer
-2.9.4 generated for my Core One +.
+2.9.4 generated for my Core One +. It uses 60°C bed.
+
+If you want mesh without any heat up (completely cold), run `mbl-cold.gcode`
+instead.
+
+If you want the measurements at standoff locations, run `probe-standoffs.gcode`.
 
 
 #### Running custom gcode
@@ -49,11 +56,11 @@ as additional parameter.
 
 Any gcode that you prefix with a star (`*`) will be captured to a file.
 
-For example, say I have `customgcode.txt` file with:
+For example, say I have `custom.gcode` file with:
 
 ``` text
-M105 ; ask temperature
-M114 ; ask current pos
+M105  ; ask temperature
+M114  ; ask current pos
 *M115 ; ask firmware info + store
 ```
 
@@ -87,9 +94,9 @@ $ python run_gcode.py /dev/ttyACM0 115200 customgcode.txt
 << ok
 ** Printer detected.
 
->> M105 ; ask temperature
+>> M105  ; ask temperature
 << ok T:40.00/39.00 B:29.64/10.00 X:32.00/36.00 A:40.45/0.00 @:0 B@:0 C@:27.65 HBR@:0
->> M114 ; ask current pos
+>> M114  ; ask current pos
 << X:0.00 Y:-4.00 Z:15.00 E:-2.00 Count A:-399 B:397 Z:6000
 << ok
 >> M115 ; ask firmware info + store

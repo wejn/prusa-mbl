@@ -1,9 +1,9 @@
-; home & forget MBL
+M117 Home & forget MBL
 G28
 G29 P0
 G29 D
 
-; probe standoffs
+M117 Probe standoffs
 *G29 P10 V4 X15 Y10
 *G29 P10 V4 X125 Y10
 *G29 P10 V4 X230 Y10
@@ -13,4 +13,10 @@ G29 D
 *G29 P10 V4 X15 Y220
 *G29 P10 V4 X15 Y115
 *G29 P10 V4 X125 Y115
+
+M117 Cleanup
 G0 X2 Y2 Z2 F10000
+
+M117 Done
+M300 S440 P80 ; beep
+M300 S440 P80 ; beep

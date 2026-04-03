@@ -27,53 +27,16 @@ import time
 import serial
 
 DEFAULT_SEQUENCE = [
-    # Prelude
+    # Default sequence is a no-op. Supply a gcode file.
     "M105          ; ask current temp",
     "M114          ; ask current position",
-
-    # Bed leveling prep
-    "G90           ; use absolute coordinates",
-    "M83           ; extruder relative mode",
-    "M140 S60      ; set bed temp",
-    "M109 R170     ; wait for nozzle temp",
-    "M84 E         ; turn off E motor",
-    "G28           ; home all without mesh bed level",
-    "M141 S35      ; nominal chamber temp",
-    "G0 Z40 F10000 ; move to Z40",
-    "M104 T0 S130  ; set nozzle temp to 130C",
-    "M190 R60      ; wait for bed temp",
-    "M107          ; fan off",
-    "G29 G         ; absorb heat", # optional?
-    "M109 R170     ; wait for MBL temp",
-    "M302 S155     ; lower cold extrusion limit to 155C",
-    "G1 E-2 F2400  ; retraction",
-    "M84 E         ; turn off E motor",
-
-    # Nozzle cleaning?
-    "G29 P9 X208 Y-2.5 W32 H4 ; ?",
-
-    # MBL procedure
-    "M84 E         ; turn off E motor",
-    "G29 P1        ; invalidate mbl & probe print area",
-    "G29 P1 X150 Y0 W100 H20 C ; probe near purge place",
-    "G29 P3.2      ; interpolate mbl probes",
-    "G29 P3.13     ; extrapolate mbl outside probe area",
-
-    # Record
-    "*G29 T        ; capture bed topography",
-    "*G29 T0       ; capture bed topography (normal, explicit)",
-    "*G29 T1       ; capture bed topography (csv)",
-
-    # Cleanup
-    "M104 S0       ; turn off temperature",
-    "M140 S0       ; turn off heatbed",
-    "M107          ; turn off fan",
-    "G0 X0 Y-4 Z15 F4800 ; move away from printbed",
+    "M300 S440 P80 ; beep",
 ]
 
-PRINTER_DETECT_TIMEOUT = 5.0   # seconds to wait for M115 response
+SETTLE_WAIT            = 2.0     # seconds to wait after buffer reset
+PRINTER_DETECT_TIMEOUT = 5.0     # seconds to wait for M115 response
 COMMAND_TIMEOUT        = 5*60.0  # max seconds to wait for 'ok' per command
-READLINE_TIMEOUT       = 0.1   # serial readline poll interval
+READLINE_TIMEOUT       = 0.1     # serial readline poll interval
 
 
 def open_serial(device: str, baud: int) -> serial.Serial:
@@ -140,7 +103,7 @@ def verify_printer(ser: serial.Serial) -> bool:
     print("** Verifying printer presence with M115 …")
     ser.reset_input_buffer()
     # the printer may need a moment after reset
-    time.sleep(2.0)
+    time.sleep(SETTLE_WAIT)
     ser.reset_input_buffer()
 
     ok, lines = send_command(ser, "M115", timeout=PRINTER_DETECT_TIMEOUT, capture=True)
