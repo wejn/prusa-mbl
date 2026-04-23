@@ -283,7 +283,7 @@ def main() -> int:
 
             if do_capture:
                 filename = save_output(captured, cmd)
-                just_cmd, _ = cmd.split(';')
+                just_cmd = cmd.split(';')[0]
                 Output.info(f"** output of [{just_cmd.strip()}] saved to: {filename}")
 
     Output.info("** Done.")
