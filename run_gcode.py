@@ -16,6 +16,11 @@ You can, however, supply a file, and in it mark arbitrary gcodes
 marked to be captured, by prefixing them with a star.
 
 The capture will be written to gcode_<gcode>_<YYmmdd_HHMMSS>.txt.
+
+Command completion is detected using an M118 sync marker sent right after
+every command (not by waiting for 'ok'), because newer firmware (e.g. Buddy
+7.x/8.x on Core ONE+ Gen2) emits a stray 'ok' in the middle of long probing
+operations, which would otherwise shift all captured output by one command.
 """
 
 import argparse
@@ -38,8 +43,10 @@ DEFAULT_SEQUENCE = [
 
 SETTLE_WAIT            = 2.0     # seconds to wait after buffer reset
 PRINTER_DETECT_TIMEOUT = 5.0     # seconds to wait for M115 response
-COMMAND_TIMEOUT        = 5*60.0  # max seconds to wait for 'ok' per command
+COMMAND_TIMEOUT        = 30*60.0 # max seconds per command (heat soak / chamber wait can take long)
 READLINE_TIMEOUT       = 0.1     # serial readline poll interval
+SYNC_MARKER            = "PRUSA_MBL_SYNC"  # echoed back by M118 after each command
+SYNC_TRAILER_TIMEOUT   = 2.0     # seconds to wait for the 'ok' that follows the marker
 
 
 class Color:
@@ -163,7 +170,8 @@ def open_serial(device: str, baud: int) -> serial.Serial:
 
 def read_until_ok(ser: serial.Serial,
                   timeout: float,
-                  capture: bool = False) -> tuple[bool, list[str]]:
+                  capture: bool = False,
+                  quiet: bool = False) -> tuple[bool, list[str]]:
     """
     Read lines from *ser* until an 'ok' line is received or *timeout* expires.
     Returns (ok_received, lines_read).
@@ -177,7 +185,8 @@ def read_until_ok(ser: serial.Serial,
             continue
         line = raw.decode("ascii", errors="replace").rstrip()
         if line:
-            Output.beautify_incoming(f"<< {line}")
+            if not quiet:
+                Output.beautify_incoming(f"<< {line}")
             if capture:
                 lines.append(line)
         if line.lower().startswith("ok"):
@@ -186,22 +195,75 @@ def read_until_ok(ser: serial.Serial,
     return False, lines
 
 
+def read_until_marker(ser: serial.Serial,
+                      marker: str,
+                      timeout: float,
+                      capture: bool = False) -> tuple[bool, list[str]]:
+    """
+    Read lines from *ser* until the M118 *marker* echo arrives or *timeout* expires.
+
+    A bare 'ok' is not a reliable end-of-command signal: Buddy firmware on the
+    Core ONE+ Gen2 emits an extra 'ok' in the middle of probing (after the
+    nozzle cleaning heat-up), which shifts every subsequent capture by one
+    command. M118 is executed in order, only after the preceding command fully
+    completed, so its echo is a reliable delimiter. Should the firmware not know
+    M118, the "Unknown command" echo still contains the marker and arrives at
+    the same point, so the same logic applies.
+
+    Returns (marker_received, lines_read). The marker echo and the 'ok' that
+    acknowledges the M118 itself are not part of lines_read.
+    """
+    lines: list[str] = []
+    deadline = time.monotonic() + timeout
+
+    while time.monotonic() < deadline:
+        raw = ser.readline()
+        if not raw:
+            continue
+        line = raw.decode("ascii", errors="replace").rstrip()
+        if not line:
+            continue
+        if marker in line:
+            # swallow the 'ok' acknowledging the M118 itself
+            read_until_ok(ser, SYNC_TRAILER_TIMEOUT, quiet=True)
+            return True, lines
+        Output.beautify_incoming(f"<< {line}")
+        if capture:
+            lines.append(line)
+        if line.startswith("//") and "action:cancel" in line:
+            # Job was cancelled on the printer (screen/error); the queue incl.
+            # our marker got flushed, so there is no point waiting any longer.
+            Output.error("!! Printer reported action:cancel (job stopped on the printer).")
+            return False, lines
+
+    return False, lines
+
+
+_sync_counter = 0
+
+
 def send_command(ser: serial.Serial,
                  cmd: str,
                  timeout: float = COMMAND_TIMEOUT,
                  capture: bool = False) -> tuple[bool, list[str]]:
     """
-    Send command to the serial port, wait for 'ok', optionally catch output.
-    Returns (ok_received, lines_read).
+    Send command to the serial port followed by an M118 sync marker,
+    wait for the marker echo, optionally catch output.
+    Returns (completed, lines_read).
     """
+    global _sync_counter  # pylint: disable=global-statement
     cmd = cmd.strip()
     if not cmd or cmd.startswith(";"):
         return True, []
 
+    _sync_counter += 1
+    marker = f"{SYNC_MARKER}_{_sync_counter}"
+
     Output.beautify_outgoing(f">> {cmd}")
     ser.write((cmd + "\n").encode("ascii"))
+    ser.write((f"M118 {marker}\n").encode("ascii"))
     ser.flush()
-    return read_until_ok(ser, timeout, capture=capture)
+    return read_until_marker(ser, marker, timeout, capture=capture)
 
 
 def verify_printer(ser: serial.Serial) -> bool:
@@ -278,12 +340,17 @@ def main() -> int:
             ok, captured = send_command(ser, cmd, capture=do_capture)
 
             if not ok:
-                Output.error(f"!! Error: timeout waiting for 'ok' after: {cmd}")
+                Output.error(f"!! Error: did not complete: {cmd}")
+                Output.error("!! Turning heaters and fan off (best effort).")
+                time.sleep(SYNC_TRAILER_TIMEOUT)   # let the printer finish its own cleanup chatter
+                ser.reset_input_buffer()
+                for safe_cmd in ("M104 S0", "M140 S0", "M107"):
+                    send_command(ser, safe_cmd, timeout=SYNC_TRAILER_TIMEOUT)
                 return 1
 
             if do_capture:
                 filename = save_output(captured, cmd)
-                just_cmd, _ = cmd.split(';')
+                just_cmd = cmd.split(';', 1)[0]
                 Output.info(f"** output of [{just_cmd.strip()}] saved to: {filename}")
 
     Output.info("** Done.")
