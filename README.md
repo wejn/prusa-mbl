@@ -58,6 +58,11 @@ as additional parameter.
 
 Any gcode that you prefix with a star (`*`) will be captured to a file.
 
+Note: after every gcode the runner sends an `M118 PRUSA_MBL_SYNC_<n>` marker
+and waits for its echo instead of relying on `ok`. Newer firmware (Buddy 7.x/8.x
+on Core ONE+ Gen2) emits an extra `ok` in the middle of probing, which used to
+shift every captured file by one command.
+
 For example, say I have `custom.gcode` file with:
 
 ``` text

@@ -22,6 +22,11 @@ def parse_bed_mesh(filepath: str) -> tuple[np.ndarray, tuple, tuple]:
 
     coord_pattern = re.compile(r'\(\s*(\d+),\s*(\d+)\)')
     coords = coord_pattern.findall(text)
+    if len(coords) < 3:
+        sys.exit(f"{filepath}: no 'Bed Topography Report' found. "
+                 "Pass the gcode_G29_T0_*.txt file produced by run_gcode.py; "
+                 "if that file only contains 'ok', the capture was shifted -- "
+                 "check gcode_G29_T1_*.txt or re-run with the current run_gcode.py.")
     x_min, y_max = int(coords[0][0]), int(coords[0][1])
     x_max, _     = int(coords[1][0]), int(coords[1][1])
     _,     y_min = int(coords[2][0]), int(coords[2][1])

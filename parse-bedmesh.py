@@ -2,6 +2,7 @@
 
 import glob
 import re
+import sys
 from collections import defaultdict
 
 pattern = re.compile(r"Bed X:\s*([-\d.]+)\s*Y:\s*([-\d.]+)\s*Z:\s*([-\d.]+)")
@@ -36,7 +37,11 @@ print(f"  # {header}(for each y row)")
 for y in ys:
     row_vals = []
     for x in xs:
-        z = grid.get((x, y), 0.0)
+        z = grid.get((x, y))
+        if z is None:
+            print(f"WARNING: no probe result for x={int(x)} y={int(y)}, using 0.000",
+                  file=sys.stderr)
+            z = 0.0
         row_vals.append(f"{z: .3f}")
     row_str = ",  ".join(row_vals)
     print(f"  {row_str},  # y={int(y)}")

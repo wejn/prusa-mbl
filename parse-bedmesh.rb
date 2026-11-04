@@ -34,7 +34,11 @@ puts "  # #{header}(for each y row)"
 # Rows
 ys.each do |y|
   row = xs.map do |x|
-    val = grid[[x, y]] || 0.0
+    val = grid[[x, y]]
+    if val.nil?
+      warn "WARNING: no probe result for x=#{x.to_i} y=#{y.to_i}, using 0.000"
+      val = 0.0
+    end
     "% .3f" % val
   end.join(",  ")
 
